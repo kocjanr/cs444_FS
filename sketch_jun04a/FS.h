@@ -14,8 +14,8 @@ using namespace std;
 
 struct FCB{
     char fileName[30];
-    int currentFileOffset;
-    int dataControlBlock[16] = {-1};
+    int offset = 0;
+    int dataBlock[16] = {-1};
 };
 
 class FS{
@@ -26,9 +26,11 @@ class FS{
         void list();
         void create(char fileName[]);
         void deleteFile(char fileName[]);
-        void closeFile(char fileName[]);
+        void closeFile(FCB *f);
         void openFile(char fileName[], FCB *f);
-        void writeFile(FCB *f,char data, int dataSize);
+        void writeFile(FCB *f,char data[], int dataSize);
+        void readFile(FCB *f);
+        void fileSeek(FCB *f);
         
         Microchip_24LC256 eprom;
     private:
@@ -39,6 +41,6 @@ class FS{
         byte bitVector[64];
         signed int directory[32];
         int fileCount;
-        int freeBlock;   
+        int freeBlock;
         FCB fcb;         
 };
