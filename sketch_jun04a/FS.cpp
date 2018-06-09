@@ -49,7 +49,7 @@ void FS::list() {
     }
 
     eprom.read_page(x, (byte*)&fcb);
-    Serial << "File: " << fcb.fileName << " " << sizeof(fcb) << " bytes" <<endl;
+    Serial << "File: " << fcb.fileName << " " << sizeof(fcb) << " bytes" << endl;
   }
 }
 
@@ -128,7 +128,7 @@ void FS::openFile(char fileName[], FCB *f) {
 void FS::writeFile(FCB *f, char data[], int dataSize) {
   int currentBlock = f->offset / 64;
   int amount = f->offset + dataSize;
-  
+
 
   //Serial <<"File: " << f->fileName << " CB: " << currentBlock << " amnt: " << amount << endl;
   //Serial <<"data: " << data << " size: " << dataSize << " offset: " << f->offset << endl;
@@ -146,14 +146,14 @@ void FS::writeFile(FCB *f, char data[], int dataSize) {
 
   if (currentBlock < 16) { // room in dataBlock array
     //Serial << "room in dataBlock array" << endl;
-    
+
     if (f->dataBlock[currentBlock] == -1) { // no block loaded into current block
       //Serial << "no block loaded into current block" << endl;
-      
+
       if (amount < ((1 + currentBlock) * 64)) { // room left to write in current block
         char dataBuffer[64];
         //Serial << "room left to write in current block" << endl;
-        
+
         //find free bit
         int freeBlock = 0;
         int value = 0;
@@ -166,101 +166,159 @@ void FS::writeFile(FCB *f, char data[], int dataSize) {
         }
         //set bit with free bit
         setBit(freeBlock);
-        
+
         //update directory
         f->dataBlock[currentBlock] = freeBlock;
-        
+
         //eprom read page with free bit into dataBuffer
         eprom.read_page(freeBlock, dataBuffer);
-        
+
         //append data into bufferr
-        strcpy(dataBuffer,data);
-        
+        strcpy(dataBuffer, data);
+
         //write buffer to eprom
-        eprom.write_page(freeBlock,dataBuffer);
-        
-        //offset += dataSize 
+        eprom.write_page(freeBlock, dataBuffer);
+
+        //offset += dataSize
         f->offset += dataSize;
+        eprom.write_page(0, (byte*)&directory);
+        eprom.write_page(1, (byte*)&bitVector);
         return;
       }
       if (amount > ((1 + currentBlock) * 64)) { // not enough room in current block, get another block
         //Serial << "not enough room in current block, get another block" << endl;
         char dataBuffer[64];
-        int numberOfBlocksToFind = dataSize/64;
+        int numberOfBlocksToFind = dataSize / 64;
         //find how much free blocks are needed
+
+        eprom.write_page(0, (byte*)&directory);
+        eprom.write_page(1, (byte*)&bitVector);
         return;
       }
 
     }
-    
+
     if (f->dataBlock[currentBlock] != -1) {
       //Serial << "block already in dataBlock[currentBlock]" << endl;
-      
-      if(amount < (1+currentBlock)*64){ //room left to write in block
+
+      if (amount < (1 + currentBlock) * 64) { //room left to write in block
         char dataBuffer[64];
         int offset = f->offset;
-//        Serial << "room left to write in block" << endl;
-//        Serial << "OFFSETTT :: " << offset << endl;
-//
-//        Serial << "f->dataBlock[currentBlock]: " << f->dataBlock[currentBlock] <<endl;
-        
+      
         //read in directory[freebit] from eprom
-        eprom.read_page(f->dataBlock[currentBlock],dataBuffer);
-        //Serial <<"From eprom: " << dataBuffer << endl;
+        eprom.read_page(f->dataBlock[currentBlock], dataBuffer);
+        
 
         //append data to buffer
-        strcpy(dataBuffer+offset,data);
-        //Serial <<"data buffer: " << dataBuffer << endl;
+        strcpy(dataBuffer + offset, data);
+       
         //write to directory[freebit] eprom
         eprom.write_page(f->dataBlock[currentBlock], dataBuffer);
-        
+
         // offset =+ dataSize
         f->offset += dataSize;
-        //Serial << "New OFfset: " << f->offset << endl;
+
+        eprom.write_page(0, (byte*)&directory);
+        eprom.write_page(1, (byte*)&bitVector);
+  
         return;
       }
-      
-      if(amount > (1+currentBlock)*64){ //no room left to write in block, get anothe block
-        char dataBuffer[64];
-        //Serial << "no room left to write in block, get anothe block" << endl;
-        int writeToNextBlock = amount - ((1+currentBlock)*64);
-        int writeToCurrentBlock = dataSize - writeToNextBlock;
 
-        //eprom read into data from directory[currentBlock] into buffer
-        //append writeToCurrentBlock buffer
-        //write buffer to directory[currentBlock]
+      if (amount > (1 + currentBlock) * 64) { //no room left to write in block, get anothe block
+        char dataBuffer[64];
+        
+        int writeToNextBlock = amount - ((1 + currentBlock) * 64);
+        int writeToCurrentBlock = dataSize - writeToNextBlock;
+        
+        char nextBlockBuffer[64] = {};
+        char currentBLockBuffer[64] = {};
+
+        strcpy(nextBlockBuffer, data + writeToNextBlock);
+        strncpy(currentBLockBuffer,data,writeToCurrentBlock);
+               
+        eprom.read_page(f->dataBlock[currentBlock], dataBuffer);
+
+        int x =f->dataBlock[currentBlock];
+
+        strcpy(dataBuffer + f->offset, currentBLockBuffer);
+       
+        f->dataBlock[currentBlock] = x;
+ 
+        eprom.write_page(f->dataBlock[currentBlock], dataBuffer);
+        
+        f->offset += writeToCurrentBlock;
 
         //find free bit
+        int freeBlock = 0;
+        int value = 0;
+        int byteWithFreeBit = 0;
+        for (int i = 0; i < 64; i++) {
+          value = findBit(bitVector[i]);
+          freeBlock = (i * 8) + value;
+          byteWithFreeBit = i;
+          break;
+        }
+        
         // find -1 in directory
-        //store free bit in open directory
-        //create new fcb
-        //write fcb into newly found free bit
-        //read in free bit from eprom into buffer
-        //append remaining data to buffer
-        //write to buffer newly found free bi
+        int freeDataBlockSpace = 0;
+        for (int k = 0; k < 16; k++) {
+          int val = f->dataBlock[k];
+          if(val == 0){
+            freeDataBlockSpace=k;
+            break;
+          }
+        }
+
+        //set bit with free bit
+        setBit(freeBlock);
+        f->dataBlock[freeDataBlockSpace] = freeBlock;
+       
+        eprom.read_page(f->dataBlock[freeDataBlockSpace], dataBuffer);
+         
+        strcpy(dataBuffer, nextBlockBuffer);
+        eprom.write_page(f->dataBlock[freeDataBlockSpace], dataBuffer);
+        f->offset += writeToNextBlock;
+        eprom.write_page(0, (byte*)&directory);
+        eprom.write_page(1, (byte*)&bitVector);
+        
         return;
       }
-    } 
+    }
+  }
+}
+
+//void FS::readFile(FCB*f)
+//
+// prints out the junk in the dumb file
+void FS::readFile(FCB*f){
+  Serial << "File: " << f->fileName << " contents ";
+  char dataBuffer[64];
+  char output[1024];
+  for(int i=0;i<16;i++){
+    if(f->dataBlock[i] != 0){
+      int val = f->dataBlock[i];
+      eprom.read_page(f->dataBlock[i], dataBuffer);
+      Serial << dataBuffer << endl;
+    }
   }
 
-  
 }
 // void FS::fileSeek(FCB *f)
 //
 // displays something
-void FS::fileSeek(FCB *f){
+void FS::fileSeek(FCB *f) {
   char dataBuffer[64];
   eprom.read_page(f->dataBlock[0], dataBuffer);
-  
-  Serial << "File: " <<f->fileName << " data: " << dataBuffer << endl;
+
+  Serial << "File: " << f->fileName << " data: " << dataBuffer << endl;
 }
 
 //void FS::deleteFile(char fileName[])
 //
-// Takes in a file name and sets the bit 
+// Takes in a file name and sets the bit
 // associated with file to 1 and sets
 // the directory index to -1
-void FS::deleteFile(char fileName[]) { 
+void FS::deleteFile(char fileName[]) {
   int directoryBlock = 0;
   for (int i = 0; i < DIRECTORY_SIZE; i++) {
     directoryBlock = directory[i];
@@ -269,8 +327,8 @@ void FS::deleteFile(char fileName[]) {
     int result = strcmp(fileName, fcb.fileName);
     if (result == 0) {
       clearBit(directoryBlock);
-      directory[i] = -1;   
-             
+      directory[i] = -1;
+
       Serial << fileName << " has been deleted " << endl;
       eprom.write_page(0, (byte*)&directory);
     }
@@ -278,28 +336,25 @@ void FS::deleteFile(char fileName[]) {
 }
 
 void FS::closeFile(FCB *f) {
-  Serial << f->fileName << endl;
   for (int i = 0; i < DIRECTORY_SIZE; i++) {
-
     int x = directory[i];
     if (x != -1) {
       eprom.read_page(x, (byte*)&fcb);
-      Serial << "File: " << fcb.fileName << " " << sizeof(fcb) << " bytes" << " " <<  x <<endl;
-      int val = strcmp(f->fileName,fcb.fileName);
-      if(val == 0){
-        Serial << "Match" << endl;
-        eprom.write_page(x,(byte*)f);
+      int val = strcmp(f->fileName, fcb.fileName);
+      if (val == 0) {
+        Serial << f->fileName << " closed" << endl;
+        eprom.write_page(x, (byte*)f);
         break;
       }
-      
+
     }
   }
-  
+
 }
 
 //int FS::findBit(byte bytes)
 //
-// takes in a byte and finds 
+// takes in a byte and finds
 // an avaible bit and returns
 // the byte value
 int FS::findBit(byte bytes) {
