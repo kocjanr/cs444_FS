@@ -28,26 +28,28 @@ void setup() {
 
   //wite to file "top_secret_stuff.txt"
   fileSystem.writeFile(&x,"mic check number 1",18);
-  Serial.println();
-  fileSystem.fileSeek(&x);
-  Serial.println();
   
   fileSystem.writeFile(&x,"isnt this a lot of fun?",23);
-  Serial.println();
+
+  //seek to front of file
   fileSystem.fileSeek(&x);
   Serial.println();
 
-  
+  fileSystem.writeFile(&x,"we are spinal tap from the uk, you must be the usa",50);
+  Serial.println();
+  fileSystem.readFile(&x);
+
   //close a file
-  //fileSystem.closeFile(&x);
-  //Serial.println();
-  //fileSystem.list();
+  fileSystem.closeFile(&x);
+  Serial.println();
+  fileSystem.list();
+  Serial.println();
 
   //delete a file
-  //fileSystem.deleteFile("top_secret_stuff.txt");
-  //fileSystem.list();
+  fileSystem.deleteFile("top_secret_stuff.txt");
+  fileSystem.list();
 
-   //fileSystem.reformat();
+   fileSystem.reformat();
   
 }
 
